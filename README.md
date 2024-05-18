@@ -9,11 +9,13 @@
      ```
 
 3. **钉钉 Webhook 配置**:
-   - 请将你自己的钉钉 Webhook 填入以下位置。如果没有钉钉，请注释掉 `send_to_dingtalk_webhook(message)` 代码。
+   - 请将你自己的钉钉 Webhook 填入以下位置。
      ```python
      # 填入你的钉钉 webhook
      webhook = ''
-
-     # 发送消息到钉钉
-     # send_to_dingtalk_webhook(message)
      ```
+     如果没有钉钉，请注释掉 `send_to_dingtalk_webhook(message)` 代码。
+      ```
+      # 发送消息到钉钉
+      # send_to_dingtalk_webhook(message)
+      ```
