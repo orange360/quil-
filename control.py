@@ -3,7 +3,9 @@ import paramiko
 import json
 import pandas as pd
 import logging
-
+import platform
+def get_system_architecture():
+    return platform.machine()
 
 # Configure logging for the script
 logging.basicConfig(level=logging.INFO,
@@ -75,7 +77,7 @@ def clone_store_repo(ssh):
         logger.error(f"Error: {error}")
 
 def run_check_script(ssh, name):
-    command = 'sudo grpcurl -plaintext localhost:8337 quilibrium.node.node.pb.NodeService.GetNodeInfo'
+    command = 'grpcurl -plaintext localhost:8337 quilibrium.node.node.pb.NodeService.GetNodeInfo'
     output, error = execute_command(ssh, command)
 
     if output:
@@ -84,16 +86,19 @@ def run_check_script(ssh, name):
             output_json = json.loads(output)
             peerId = output_json.get("peerId")
             max_frame = output_json.get("maxFrame")
-            if max_frame:
+            if max_frame is  None or (not max_frame.isdigit() or len(max_frame) != 6):
+                logger.warning("maxFrame不是六位数字！")
+                reboot(ssh, name)
+            else:
                 logger.info(f"name: {name}")
                 logger.info(f"peerId: {peerId}")
                 logger.info(f"maxFrame: {max_frame}\n")
         except json.JSONDecodeError:
             reboot(ssh, name)
-            logger.info(f"{name}挂了: {output}", end='')
+            logger.info(f"{name}挂了: {output}")
 
     if error:
-        logger.error(f"{name}挂了: \n{error}", end='')
+        logger.error(f"{name}挂了: \n{error}")
         reboot(ssh, name)
 
 def run_start_script(ssh):
@@ -122,22 +127,43 @@ def check_grpcurl_installed(ssh):
     output, error = execute_command(ssh, check_command)
     return output.strip() != ""
 
+
 def install_grpcurl(ssh):
-    if not check_grpcurl_installed(ssh):
+    system_arch = get_system_architecture()
+    print(system_arch)
+    install_command = ""
+
+    if system_arch == 'x86_64':
         install_command = (
-            'wget https://github.com/fullstorydev/grpcurl/releases/download/v1.8.7/grpcurl_1.8.7_linux_x86_64.tar.gz && '
-            'tar -xvf grpcurl_1.8.7_linux_x86_64.tar.gz && '
+            'wget https://github.com/fullstorydev/grpcurl/releases/download/v1.9.1/grpcurl_1.9.1_linux_x86_64.tar.gz && '
+            'tar -xvf grpcurl_1.9.1_linux_x86_64.tar.gz && '
             'sudo mv grpcurl /usr/local/bin/ && '
-            'rm grpcurl_1.8.7_linux_x86_64.tar.gz'
+            'rm grpcurl_1.9.1_linux_x86_64.tar.gz'
         )
-        output, error = execute_command(ssh, install_command)
-        logger.info("Installing grpcurl Output:", output)
-        logger.error("Installing grpcurl Error:", error)
+    elif system_arch == 'AMD64':
+        install_command = (
+            'wget https://github.com/fullstorydev/grpcurl/releases/download/v1.9.1/grpcurl_1.9.1_linux_arm64.tar.gz &&'
+            'tar -xvf grpcurl_1.9.1_linux_arm64.tar.gz && '
+            'sudo mv grpcurl /usr/local/bin/ && '
+            'rm grpcurl_1.9.1_linux_arm64.tar.gz'
+        )
     else:
-        logger.info("grpcurl is already installed.")
+        print("Unsupported architecture:", system_arch)
+        return
+
+    if not check_grpcurl_installed(ssh):
+        output, error = execute_command(ssh, install_command)
+        if error:
+            print("Installing grpcurl Error:", error)
+        else:
+            print("grpcurl has been installed successfully.")
+    else:
+        pass
 
 file_path = 'server_info.xlsx'
 servers = read_server_info(file_path)
+
+
 
 for server in servers:
     name = server['name']
@@ -150,6 +176,6 @@ for server in servers:
 
     if ssh:
         # Uncomment the line below to install grpcurl if not already installed
-        # install_grpcurl(ssh)
+        install_grpcurl(ssh)
         run_check_script(ssh, name)
         ssh.close()
